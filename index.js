@@ -3,8 +3,10 @@ import { MongoClient } from "mongodb";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import cors from "cors";
+import { ObjectId } from "mongodb";
+import nodemailer from "nodemailer";
 
-import { auth } from "./middleware/auth.js";
+import { auth, linkAuth } from "./middleware/auth.js";
 const app = express();
 
 //connecting mongodb____________________
@@ -104,6 +106,83 @@ app.post("/log-in", async (req, res) => {
     } else {
       res.status(401).send({ message: "invalid username or password" });
     }
+  }
+});
+
+app.post("/forget-password", async (req, res) => {
+  const { email } = req.body;
+
+  const checkEmail = await client
+    .db("reset-password")
+    .collection("users")
+    .findOne({ email: email });
+
+  console.log(checkEmail);
+
+  if (checkEmail) {
+    const token = jwt.sign({ id: checkEmail._id }, "mysecretkey", {
+      expiresIn: "10m",
+    });
+
+    let config = {
+      service: "gmail",
+      auth: {
+        user: "raghunandanv19@gmail.com",
+        pass: "iwjhsijcarsdnwni",
+      },
+    };
+
+    let transpoter = nodemailer.createTransport(config);
+
+    let message = {
+      from: "raghunandanv19@gmail.com",
+      to: checkEmail.email,
+      subject: "PASSWORD RESET LINK",
+      text: `http://localhost:3000/forget-password/${checkEmail._id}/${token}`,
+      html: `<p>http://localhost:3000/forget-password/${checkEmail._id}/${token}</p> <p>the link expires in 10 minitus </p>`,
+    };
+
+    await transpoter.sendMail(message);
+
+    res.send({
+      message: "password link has been sent to your mail",
+      // theLink: `http://localhost:3000/forget-password/${checkEmail._id}/${token}`,
+    });
+  } else {
+    res.status(401).send({ message: "the username does not exists" });
+  }
+});
+
+app.post("/forget-password/:id/:token", linkAuth, async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+  console.log(id);
+
+  const generateHashedPassword = async (password) => {
+    const NO_OF_ROUNDS = 10;
+    const salt = await bcrypt.genSalt(NO_OF_ROUNDS);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    return hashedPassword;
+  };
+
+  const hashPassword = await generateHashedPassword(password);
+
+  const findUserById = await client
+    .db("reset-password")
+    .collection("users")
+    .findOne({ _id: new ObjectId(id) });
+
+  if (findUserById) {
+    await client
+      .db("reset-password")
+      .collection("users")
+      .updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { password: hashPassword } }
+      );
+    res.send({ message: "password changed successfully" });
+  } else {
+    res.status(401).send({ message: "id tampared" });
   }
 });
 
