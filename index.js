@@ -5,21 +5,25 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import { ObjectId } from "mongodb";
 import nodemailer from "nodemailer";
+import * as dotenv from "dotenv";
 
 import { auth, linkAuth } from "./middleware/auth.js";
+dotenv.config();
 const app = express();
 
 //connecting mongodb____________________
-const MONGO_URL =
-  "mongodb+srv://raghutwo:welcome123@cluster0.4gd3qjn.mongodb.net";
+const MONGO_URL = process.env.MONGO_URL;
 const client = new MongoClient(MONGO_URL);
 await client.connect();
 console.log("mongo connected");
 //_______________________________________
 
-const PORT = 4000;
+const PORT = process.env.PORT;
 app.use(express.json());
 app.use(cors());
+
+const frontEndURL = "http://localhost:3000";
+const backEndURL = "";
 
 app.get("/", (req, res) => {
   res.send("express working successfully");
@@ -63,7 +67,7 @@ app.post("/sign-up", async (req, res) => {
     //____________________
 
     //get jwt token___________
-    const token = jwt.sign({ id: hashedPassword }, "mysecretkey");
+    const token = jwt.sign({ id: hashedPassword }, process.env.SECRET);
     //________________________
     const patchedData = { ...data, token: token, password: hashedPassword };
 
@@ -92,7 +96,7 @@ app.post("/log-in", async (req, res) => {
     console.log(checkPass);
 
     if (checkPass) {
-      const token = jwt.sign({ id: checkUser._id }, "mysecretkey");
+      const token = jwt.sign({ id: checkUser._id }, process.env.SECRET);
 
       const updateToken = await client
         .db("reset-password")
@@ -120,26 +124,26 @@ app.post("/forget-password", async (req, res) => {
   console.log(checkEmail);
 
   if (checkEmail) {
-    const token = jwt.sign({ id: checkEmail._id }, "mysecretkey", {
+    const token = jwt.sign({ id: checkEmail._id }, process.env.SECRET, {
       expiresIn: "10m",
     });
 
     let config = {
       service: "gmail",
       auth: {
-        user: "raghunandanv19@gmail.com",
-        pass: "iwjhsijcarsdnwni",
+        user: process.env.EMAIL,
+        pass: process.env.PASSWORD,
       },
     };
 
     let transpoter = nodemailer.createTransport(config);
 
     let message = {
-      from: "raghunandanv19@gmail.com",
+      from: process.env.EMAIL,
       to: checkEmail.email,
       subject: "PASSWORD RESET LINK",
-      text: `http://localhost:3000/forget-password/${checkEmail._id}/${token}`,
-      html: `<p>http://localhost:3000/forget-password/${checkEmail._id}/${token}</p> <p>the link expires in 10 minitus </p>`,
+      text: `${frontEndURL}/forget-password/${checkEmail._id}/${token}`,
+      html: `<p>${frontEndURL}/forget-password/${checkEmail._id}/${token}</p> <p>the link expires in 10 minitus </p>`,
     };
 
     await transpoter.sendMail(message);
